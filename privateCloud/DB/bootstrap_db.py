@@ -1,11 +1,11 @@
 import os
 import subprocess
 
-os.system('sudo apt update')
+os.system('sudo apt update -y')
 os.system('sudo apt install python3-pip -y')
 os.system('sudo apt install mysql-server -y')
 
-create_user="CREATE USER 'vini'@'localhost' IDENTIFIED BY '123';"
+create_user="CREATE USER 'vini'@'localhost' IDENTIFIED BY '12345678';"
 user_priv="GRANT ALL PRIVILEGES ON *.* TO 'vini'@'localhost' WITH GRANT OPTION;"
 
 mysql_cmd = "sudo mysql -u root".split(" ")
