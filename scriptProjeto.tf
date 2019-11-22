@@ -58,7 +58,7 @@ resource "openstack_compute_keypair_v2" "keyPair" {
 
 ## Instance configuration
 resource "openstack_compute_instance_v2" "webServer" {
-  name      = "DB"
+  name      = "webServer"
   region    = "RegionOne"
   image_id  = "d3de55ef-15e2-49c5-9b6d-4401f46c631a" #Bionic
   flavor_id = "d82e67e6-6d74-4e43-8e8e-a4d9403f7e68" #m1.medium
@@ -112,11 +112,6 @@ resource "null_resource" "ws_env" {
       aws_instance.OpenVPN
   ]
 
-  # triggers = {
-  #     build_number = "${timestamp()}"
-  # }
-    
-
   provisioner "file" {
     source      = "./privateCloud/webServer/bootstrap_ws.py"
     destination = "/home/ubuntu/bootstrap_ws.py"
@@ -148,8 +143,8 @@ resource "null_resource" "ws_env" {
   }
 
   provisioner "file" {
-    source      = "./privateCloud/webServer/requirements.py"
-    destination = "/home/ubuntu/requirements.py"
+    source      = "./privateCloud/webServer/requirements.txt"
+    destination = "/home/ubuntu/requirements.txt"
 
    
     connection {
@@ -219,6 +214,7 @@ resource "null_resource" "ws_env" {
 
     inline = [
       "python3 /home/ubuntu/bootstrap_ws.py",
+      "sudo chmod +x /home/ubuntu/setIp.sh",
       "/home/ubuntu/setIp.sh ${aws_instance.OpenVPN.public_ip}",
       "pip3 install -r requirements.txt",
       "touch ~/script_inicializacao",
@@ -227,7 +223,6 @@ resource "null_resource" "ws_env" {
       "echo 'tmux new-session -d -s ovpn 'sudo openvpn client.ovpn < openvpnCred'' >> ~/script_inicializacao",
       "sudo mv ~/script_inicializacao /etc/init.d/",
       "sudo chmod +x /etc/init.d/script_inicializacao",
-      "python3 ~/createDB.py ${openstack_compute_floatingip_associate_v2.dbIp.floating_ip}",
       "tmux new-session -d -s hook 'python3 hook-mysql.py'",
       "echo python Started",
       "tmux new-session -d -s ovpn 'sudo openvpn client.ovpn < openvpnCred'",
@@ -248,7 +243,7 @@ resource "openstack_blockstorage_volume_v3" "volumeWS" {
   }
 }
 
-##DB 
+############################################DB 
 
 ## Create volume
 resource "openstack_blockstorage_volume_v3" "volumeDB" {
@@ -260,12 +255,6 @@ resource "openstack_blockstorage_volume_v3" "volumeDB" {
   metadata    = {
     attached_mode = "rw"
   }
-}
-
-## Key pair
-resource "openstack_compute_keypair_v2" "keyPair" {
-  name       = "key_projeto"
-  public_key = "${var.public_key}"
 }
 
 ## Instance configuration DB
@@ -314,14 +303,14 @@ resource "openstack_networking_floatingip_v2" "dbIp" {
 ## Associate float ip
 resource "openstack_compute_floatingip_associate_v2" "dbIp" {
   floating_ip = "${openstack_networking_floatingip_v2.dbIp.address}"
-  instance_id = "${openstack_compute_instance_v2.webServer.id}"
-  fixed_ip    = "${openstack_compute_instance_v2.webServer.network.0.fixed_ip_v4}"
+  instance_id = "${openstack_compute_instance_v2.DB.id}"
+  fixed_ip    = "${openstack_compute_instance_v2.DB.network.0.fixed_ip_v4}"
 }
 
 resource "null_resource" "db_env" {
 
   provisioner "file" {
-    source      = "./bootstrap_db.py"
+    source      = "./privateCloud/DB/bootstrap_db.py"
     destination = "/home/ubuntu/bootstrap_db.py"
 
   
@@ -336,8 +325,23 @@ resource "null_resource" "db_env" {
   }
 
    provisioner "file" {
-    source      = "./createDB.py"
+    source      = "./privateCloud/DB/createDB.py"
     destination = "/home/ubuntu/createDB.py"
+
+  
+    connection {
+      host = "${openstack_compute_floatingip_associate_v2.dbIp.floating_ip}"
+      type = "ssh"
+      user = "ubuntu"
+      private_key = "${file("${var.key_name}")}"
+      timeout = "2m"
+      agent = false
+    }
+  }
+
+  provisioner "file" {
+    source      = "./privateCloud/DB/requirements.txt"
+    destination = "/home/ubuntu/requirements.txt"
 
   
     connection {
@@ -362,6 +366,7 @@ resource "null_resource" "db_env" {
 
     inline = [
       "python3 /home/ubuntu/bootstrap_db.py",
+      "pip3 install -r /home/ubuntu/requirements.txt",
       "python3 /home/ubuntu/createDB.py"
     ]
   }
@@ -445,11 +450,22 @@ resource "null_resource" "ovpn_env" {
   depends_on = [
       aws_instance.OpenVPN
   ]
-
-  # triggers = {
-  #     build_number = "${timestamp()}"
-  # }
     
+  provisioner "file" {
+    source      = "./publicCloud/ovpn/ovpn_configs.zip"
+    destination = "/home/ubuntu/ovpn_configs.zip"
+
+   
+    connection {
+      host = "${aws_instance.OpenVPN.public_ip}"
+      type = "ssh"
+      user = "ubuntu"
+      private_key = "${file("${var.key_name}")}"
+      timeout = "2m"
+      agent = false
+    }
+  }
+
 
   provisioner "file" {
     source      = "./publicCloud/ovpn/createOVPN.py"
@@ -491,6 +507,9 @@ resource "null_resource" "ovpn_env" {
     }
 
     inline = [
+      "sudo apt install zip -y",
+      "sudo chmod +x /home/ubuntu/port_forwarding.sh",
+      "unzip /home/ubuntu/ovpn_configs.zip",
       "python3 createOVPN.py ${aws_instance.OpenVPN.private_ip}"
     ]
   } 
