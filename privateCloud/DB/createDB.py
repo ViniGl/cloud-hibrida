@@ -4,7 +4,7 @@ from functools import partial
 DATABASE_NAME = 'projetoCloud'
 DATABASE_USER = 'vini'
 DATABASE_PWD = '12345678'
-DATABASE_HOST = 'localhost'
+DATABASE_HOST = '0.0.0.0'
 
 
 def run_db_query(connection, query, args=None):

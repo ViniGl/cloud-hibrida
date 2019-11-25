@@ -7,6 +7,7 @@ Proximo passo:
 #########################################################################################
 
 
+
 ###################################OpenStack#############################################
 
 ## Conection AUTH
@@ -35,12 +36,33 @@ resource "openstack_networking_secgroup_rule_v2" "rule_1" {
   security_group_id = "${openstack_networking_secgroup_v2.secgroup_1.id}"
 }
 
+
 resource "openstack_networking_secgroup_rule_v2" "rule_2" {
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "icmp"
   port_range_min    = 0
   port_range_max    = 0
+  remote_ip_prefix  = "0.0.0.0/0"
+  security_group_id = "${openstack_networking_secgroup_v2.secgroup_1.id}"
+}
+
+resource "openstack_networking_secgroup_rule_v2" "rule_3" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 3306
+  port_range_max    = 3306
+  remote_ip_prefix  = "0.0.0.0/0"
+  security_group_id = "${openstack_networking_secgroup_v2.secgroup_1.id}"
+}
+
+resource "openstack_networking_secgroup_rule_v2" "rule_4" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 5000
+  port_range_max    = 5000
   remote_ip_prefix  = "0.0.0.0/0"
   security_group_id = "${openstack_networking_secgroup_v2.secgroup_1.id}"
 }
@@ -63,10 +85,10 @@ resource "openstack_compute_instance_v2" "webServer" {
   image_id  = "d3de55ef-15e2-49c5-9b6d-4401f46c631a" #Bionic
   flavor_id = "d82e67e6-6d74-4e43-8e8e-a4d9403f7e68" #m1.medium
   key_pair  = "key_projeto"
-  security_groups = ["default"]
+  security_groups = ["ProjetoSG"]
   
   depends_on = [
-      aws_instance.OpenVPN,
+    #   aws_instance.OpenVPN,
       openstack_blockstorage_volume_v3.volumeWS
   ]
 
@@ -107,9 +129,14 @@ resource "openstack_compute_floatingip_associate_v2" "wbIp" {
 
 resource "null_resource" "ws_env" {
 
+  triggers = {
+    build_number = "${timestamp()}"
+  }
+
+
   depends_on = [
       openstack_compute_floatingip_associate_v2.wbIp,
-      aws_instance.OpenVPN
+    #   aws_instance.OpenVPN
   ]
 
   provisioner "file" {
@@ -198,6 +225,22 @@ resource "null_resource" "ws_env" {
       user = "ubuntu"
       private_key = "${file("${var.key_name}")}"
       timeout = "2m"
+
+      agent = false
+    }
+  }
+
+  provisioner "file" {
+    source      = "./privateCloud/webServer/script_inicializacao.sh"
+    destination = "/home/ubuntu/script_inicializacao.sh"
+
+   
+    connection {
+      host = "${openstack_compute_floatingip_associate_v2.wbIp.floating_ip}"
+      type = "ssh"
+      user = "ubuntu"
+      private_key = "${file("${var.key_name}")}"
+      timeout = "2m"
       agent = false
     }
   }
@@ -217,15 +260,13 @@ resource "null_resource" "ws_env" {
       "sudo chmod +x /home/ubuntu/setIp.sh",
       "/home/ubuntu/setIp.sh ${aws_instance.OpenVPN.public_ip}",
       "pip3 install -r requirements.txt",
-      "touch ~/script_inicializacao",
-      "echo '#!/bin/bash' >> ~/script_inicializacao",
-      "echo 'tmux new-session -d -s hook 'python3 hook-mysql.py ${openstack_compute_floatingip_associate_v2.dbIp.floating_ip}'' >> ~/script_inicializacao",
-      "echo 'tmux new-session -d -s ovpn 'sudo openvpn client.ovpn < openvpnCred'' >> ~/script_inicializacao",
-      "sudo mv ~/script_inicializacao /etc/init.d/",
-      "sudo chmod +x /etc/init.d/script_inicializacao",
-      "tmux new-session -d -s hook 'python3 hook-mysql.py'",
-      "echo python Started",
-      "tmux new-session -d -s ovpn 'sudo openvpn client.ovpn < openvpnCred'",
+      "echo PIP instalado",
+      "sudo chmod +x /home/ubuntu/script_inicializacao.sh",
+      "sudo sed -i 's/#IP_PRIVADO/${openstack_compute_instance_v2.DB.access_ip_v4}/g' /home/ubuntu/script_inicializacao.sh",
+      "echo Ip trocado",
+      "sudo mv /home/ubuntu/script_inicializacao.sh /etc/init.d/",
+      "/etc/init.d/script_inicializacao.sh ${openstack_compute_instance_v2.DB.access_ip_v4}",
+      "echo Processos iniciados",
     ]
   } 
    
@@ -264,7 +305,7 @@ resource "openstack_compute_instance_v2" "DB" {
   image_id  = "d3de55ef-15e2-49c5-9b6d-4401f46c631a" #Bionic
   flavor_id = "d82e67e6-6d74-4e43-8e8e-a4d9403f7e68" #m1.medium
   key_pair  = "key_projeto"
-  security_groups = ["default"]
+  security_groups = ["ProjetoSG"]
   
   depends_on = [
       openstack_blockstorage_volume_v3.volumeDB
@@ -309,9 +350,11 @@ resource "openstack_compute_floatingip_associate_v2" "dbIp" {
 
 resource "null_resource" "db_env" {
 
+
+
   provisioner "file" {
-    source      = "./privateCloud/DB/bootstrap_db.py"
-    destination = "/home/ubuntu/bootstrap_db.py"
+    source      = "./privateCloud/DB/bootstrap_db.sh"
+    destination = "/home/ubuntu/bootstrap_db.sh"
 
   
     connection {
@@ -353,6 +396,21 @@ resource "null_resource" "db_env" {
       agent = false
     }
   }
+
+  provisioner "file" {
+    source      = "./privateCloud/DB/setMysql.sh"
+    destination = "/home/ubuntu/setMysql.sh"
+
+  
+    connection {
+      host = "${openstack_compute_floatingip_associate_v2.dbIp.floating_ip}"
+      type = "ssh"
+      user = "ubuntu"
+      private_key = "${file("${var.key_name}")}"
+      timeout = "2m"
+      agent = false
+    }
+  }
     
   provisioner "remote-exec" {
     connection {
@@ -365,7 +423,10 @@ resource "null_resource" "db_env" {
     }
 
     inline = [
-      "python3 /home/ubuntu/bootstrap_db.py",
+      "sudo apt update -y",
+      "sudo chmod +x ./bootstrap_db.sh && ./bootstrap_db.sh",
+      "chmod +x ./setMysql.sh && sudo ./setMysql.sh",
+      "sudo systemctl restart mysql",
       "pip3 install -r /home/ubuntu/requirements.txt",
       "python3 /home/ubuntu/createDB.py"
     ]
@@ -447,9 +508,9 @@ resource "aws_instance" "OpenVPN" {
 
 resource "null_resource" "ovpn_env" {
 
-  depends_on = [
-      aws_instance.OpenVPN
-  ]
+  # depends_on = [
+  #     aws_instance.OpenVPN
+  # ]
     
   provisioner "file" {
     source      = "./publicCloud/ovpn/ovpn_configs.zip"
