@@ -129,19 +129,17 @@ resource "openstack_compute_floatingip_associate_v2" "wbIp" {
 
 resource "null_resource" "ws_env" {
 
-  triggers = {
-    build_number = "${timestamp()}"
-  }
 
 
   depends_on = [
       openstack_compute_floatingip_associate_v2.wbIp,
+      null_resource.db_env
     #   aws_instance.OpenVPN
   ]
 
   provisioner "file" {
-    source      = "./privateCloud/webServer/bootstrap_ws.py"
-    destination = "/home/ubuntu/bootstrap_ws.py"
+    source      = "./privateCloud/webServer/bootstrap_ws.sh"
+    destination = "/home/ubuntu/bootstrap_ws.sh"
 
    
     connection {
@@ -256,7 +254,7 @@ resource "null_resource" "ws_env" {
     }
 
     inline = [
-      "python3 /home/ubuntu/bootstrap_ws.py",
+      "sudo chmod +x /home/ubuntu/bootstrap_ws.sh && /home/ubuntu/bootstrap_ws.sh",
       "sudo chmod +x /home/ubuntu/setIp.sh",
       "/home/ubuntu/setIp.sh ${aws_instance.OpenVPN.public_ip}",
       "pip3 install -r requirements.txt",
