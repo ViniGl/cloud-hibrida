@@ -30,3 +30,13 @@ $ source openrc
 $ terraform init
 $ terraform apply
 ```
+
+## Criar a variavel de ambiente referente ao DNS do load balancer
+
+  Para rodar o client, e preciso exportar a variavel de ambiente apiAPS
+  
+  O DNS do loadbalancer sera mostrado no final do script do terraform.
+  
+  ```
+    $ export apiAPS=#IP_LOADBALANCER
+  ```
