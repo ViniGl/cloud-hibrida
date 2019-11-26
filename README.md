@@ -6,10 +6,20 @@ O script e feito utilizando o Terraform para subir toda a infraestrutuda, essa c
 ![](cloud.png)
 
 ## Preparando o ambiente
-
+- Montar o ambiente dentro do MaaS
 - Baixar o terraform
   https://www.terraform.io/downloads.html
 - Adicionar ao path
+- Instalar o Aws-CLI e adicionar as credenciais
+```
+$ sudo apt install aws-cli 
+$ aws configure
+```
+- Iniciar as credenciais do openstack
+
+```
+$ source openrc
+```
 
 ## Iniciando o terraform
 
