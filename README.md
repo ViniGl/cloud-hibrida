@@ -24,6 +24,7 @@ $ source openrc
 ## Iniciando o terraform
 
 - Adicionar sua chave publica em variables.tf
+- Iniciar o terraform
 
 ```
 $ terraform init
